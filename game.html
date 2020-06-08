@@ -7,6 +7,10 @@
     <body>
         <div id="app" ref="app">
             <h1>Vue.js 2D Game!</h1>
+            <button @click="screen.paused = !screen.paused">{{screen.paused ? 'Play' : 'Pause'}}</button>
+            <div>Enemies: {{enemies.length}}</div>
+            <div>Player Size: {{player.width}}</div>
+            <h1 v-show="win">YOU WIN!!</h1>
             <canvas ref="game" :width="screen.width" :height="screen.height" style="border: 1px solid black;"></canvas>
         </div>
     </body>
@@ -16,33 +20,216 @@
             name: 'BlockGame',
             data() {
                 return {
+                    win: false,
+                    started: false,
                     screen: {
+                        paused: false,
                         width: 640,
                         height: 640
                     },
                     socket: {},
                     context: {},
-                    position: {
-                        x: 0,
-                        y: 0
-                    }
+                    player: {
+                        speed: 5,
+                        position: {
+                            x: 20,
+                            y: 20
+                        },
+                        color: '#000000',
+                        width: 10,
+                        height: 10
+                    },
+                    enemies: [],
+                    gameloop: null
                 }
             },
             created() { },
             mounted() {
-                // Setup base info
-                this.context = this.$refs.game.getContext("2d")
 
-                // Create the the game Window
-                this.context.clearRect(0, 0, this.$refs.game.width, this.$refs.game.height);
-                this.context.fillStyle = "#FFFFFF";
-                this.context.fillRect(0, 0, this.$refs.game.width, this.$refs.game.width);
+                let amount = Math.floor(Math.random() * Math.floor(20));
+                for (let pos = 0; pos < amount; pos++) {
+                    let x = Math.floor(Math.random() * Math.floor(this.screen.height));
+                    let y = Math.floor(Math.random() * Math.floor(this.screen.width));
+                    this.spawnEnemy(x, y)
+                }
 
-                // Create the player
-                this.context.fillStyle = "#000000";
-                this.context.fillRect(this.position.x, this.position.y, 40, 40);
+                // Begin game loop                
+                var that = this
+                this.gameloop = setInterval(function(){ that.drawCanvas(that) }, 2);
+
+                // Add Keyboard Listener
+                document.addEventListener('keydown', function (event) {
+                    if (that.screen.paused) return
+
+                    // Prevent the default event so that the player is not typing randomly
+                    if (event.defaultPrevented) {
+                        return;
+                    }
+
+                    // This is the key that was released
+                    var key = event.key || event.keyCode;
+
+                    if (key == 'w' || key == 87) {
+                        // UP
+                        that.move(that.player, that.player.position.x, that.player.position.y - that.player.speed)
+                    }
+
+                    if (key == 'a' || key == 65) {
+                        // LEFT
+                        that.move(that.player, that.player.position.x - that.player.speed, that.player.position.y)
+                    }
+
+                    if (key == 's' || key == 83) {
+                        // DOWN
+                        that.move(that.player, that.player.position.x, that.player.position.y + that.player.speed)
+                    }
+
+                    if (key == 'd' || key == 68) {
+                        // RIGHT
+                        that.move(that.player, that.player.position.x + that.player.speed, that.player.position.y)
+                    }
+                });
             },
-            methods: { }
+            detroyed() {
+                clearInterval(this.gameloop)
+            },
+            methods: {
+                drawCanvas: function (that = this) {
+                    if (that.screen.paused || this.win) return
+                    console.log('redraw')
+                    // Setup base info
+                    that.context = that.$refs.game.getContext("2d")
+
+                    // Create the the game Window
+                    that.context.clearRect(0, 0, that.$refs.game.width, that.$refs.game.height);
+                    that.context.fillStyle = "#FFFFFF";
+                    that.context.fillRect(0, 0, that.$refs.game.width, that.$refs.game.width);
+
+                    // Create the player
+                    that.context.fillStyle = that.player.color;
+                    that.context.fillRect(that.player.position.x, that.player.position.y, this.player.width, this.player.height);
+                
+                    this.enemies.slice().reverse().forEach(function(element, index, object) {
+                        if (that.isCollide(that.player, element)) {
+                            that.expandPlayer(element)
+                            that.enemies.splice(object.length - 1 - index, 1);
+                        } else {
+                            that.context.fillStyle = element.color;
+                            that.context.fillRect(element.position.x, element.position.y, element.width, element.height);        
+
+                            let direction = element.direction
+                            if (direction == 0) {
+                                // up
+                                that.moveEnemy(element, element.position.x, element.position.y - element.speed)
+                            } else if (direction == 1) {
+                                // down
+                                that.moveEnemy(element, element.position.x, element.position.y + element.speed)
+                            } else if (direction == 2) {
+                                // left
+                                that.moveEnemy(element, element.position.x - element.speed, element.position.y)
+                            } else if (direction == 3) {
+                                // right
+                                that.moveEnemy(element, element.position.x + element.speed, element.position.y)
+                            }
+                        }
+                    });
+
+                    let rando = Math.floor(Math.random() * Math.floor(5000))
+
+                    if (rando > 4980 && this.enemies.length < 25 && this.player.width < 100) {
+                        let x = Math.floor(Math.random() * Math.floor(this.screen.height));
+                        let y = Math.floor(Math.random() * Math.floor(this.screen.width));
+                        this.spawnEnemy(x, y)
+                    }
+
+
+                    if (this.enemies.length <= 0) {
+                        this.win = true
+                    }
+                },
+                generateID: function () {
+                    return Date.now().toString(36) + Math.random().toString(36).substr(2);
+                },
+                isCollide(a, b) {
+                    return !(
+                        ((a.position.y + a.height) < (b.position.y)) ||
+                        (a.position.y > (b.position.y + b.height)) ||
+                        ((a.position.x + a.width) < b.position.x) ||
+                        (a.position.x > (b.position.x + b.width))
+                    );
+                },
+                expandPlayer: function (enemy) {
+                    this.player.height += enemy.height
+                    this.player.width += enemy.width
+                },
+                spawnEnemy: function (x, y) {
+                    let id = this.generateID()
+                    let size = Math.floor(Math.random() * Math.floor(20)) + 5
+                    this.enemies.push({
+                        id: id,
+                        speed: 2,
+                        position: {
+                            x: x,
+                            y: y
+                        },
+                        color: '#ff0000',
+                        width: size,
+                        height: size,
+                        direction: Math.floor(Math.random() * Math.floor(4))
+                    })
+                },
+                moveEnemy: function (who, x, y, direction) {
+                    var isRigthEdge = who.position.x + who.width + 2 >= this.screen.width
+                    var isLeftEdge = who.position.x <= 0
+                    var isBottomEdge = who.position.y + who.height + 2 >= this.screen.height
+                    var isTopEdge = who.position.y <= 0
+                    
+
+                    // Randomly change directions
+                    let rando = Math.floor(Math.random() * Math.floor(5000))
+
+                    if (rando > 4980) {
+                        who.direction =  Math.floor(Math.random() * Math.floor(4))
+                    }
+
+                    // Change direction is the wall is hit
+                    if (isTopEdge || isRigthEdge || isLeftEdge || isBottomEdge) {
+                        who.direction =  Math.floor(Math.random() * Math.floor(4))
+                    }
+                    if (isTopEdge) {
+                        who.position.y++
+                    } else if (isRigthEdge) {
+                        who.position.x--
+                    } else if (isBottomEdge) {
+                        who.position.y--
+                    } else if (isLeftEdge) {
+                        who.position.x++
+                    } else {
+                        who.position.x = x;
+                        who.position.y = y;
+                    }
+                },
+                move: function (who, x, y, direction) {
+                    var isRigthEdge = who.position.x + who.width + 2 >= this.screen.width
+                    var isLeftEdge = who.position.x <= 0
+                    var isBottomEdge = who.position.y + who.height + 2 >= this.screen.height
+                    var isTopEdge = who.position.y <= 0
+                    
+                    // Account for the boundaries
+                    if (isTopEdge) {
+                        who.position.y++
+                    } else if (isRigthEdge) {
+                        who.position.x--
+                    } else if (isBottomEdge) {
+                        who.position.y--
+                    } else if (isLeftEdge) {
+                        who.position.x++
+                    } else {
+                        who.position.x = x;
+                        who.position.y = y;
+                    }
+                }
+            }
         })
     </script>
     <style>
