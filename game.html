@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+        <title>Vue.js 2D Game</title>
+    </head>
+    <body>
+        <div id="app" ref="app">
+            <h1>Vue.js 2D Game!</h1>
+            <canvas ref="game" :width="screen.width" :height="screen.height" style="border: 1px solid black;"></canvas>
+        </div>
+    </body>
+    <script>
+        const App = new Vue({
+            el: '#app',
+            name: 'BlockGame',
+            data() {
+                return {
+                    screen: {
+                        width: 640,
+                        height: 640
+                    },
+                    socket: {},
+                    context: {},
+                    position: {
+                        x: 0,
+                        y: 0
+                    }
+                }
+            },
+            created() { },
+            mounted() {
+                // Setup base info
+                this.context = this.$refs.game.getContext("2d")
+
+                // Create the the game Window
+                this.context.clearRect(0, 0, this.$refs.game.width, this.$refs.game.height);
+                this.context.fillStyle = "#FFFFFF";
+                this.context.fillRect(0, 0, this.$refs.game.width, this.$refs.game.width);
+
+                // Create the player
+                this.context.fillStyle = "#000000";
+                this.context.fillRect(this.position.x, this.position.y, 40, 40);
+            },
+            methods: { }
+        })
+    </script>
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            background-color: #ccc;
+            font-family: "Roboto", sans-serif;
+        }
+
+        #app {
+            margin: 40px;
+        }
+    </style>
+</html>
